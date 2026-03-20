@@ -1,5 +1,9 @@
 # Task Management App
 
+[![CI](https://github.com/RangaswamyChalla/taskapp/actions/workflows/ci.yml/badge.svg)](https://github.com/RangaswamyChalla/taskapp/actions/workflows/ci.yml)
+[![Deploy](https://github.com/RangaswamyChalla/taskapp/actions/workflows/deploy.yml/badge.svg)](https://github.com/RangaswamyChalla/taskapp/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A full-stack task management application with user authentication, team management, and real-time task tracking.
 
 ## Tech Stack
@@ -18,6 +22,7 @@ taskapp/
 │   ├── controllers/   # Auth & Task controllers
 │   ├── middleware/     # Auth, validation, error handling
 │   ├── routes/        # API routes
+│   ├── tests/         # Jest unit tests
 │   ├── server.js      # Entry point
 │   └── Dockerfile     # Backend container
 ├── frontend/          # React application
@@ -32,6 +37,8 @@ taskapp/
 │   └── schema.sql     # PostgreSQL schema
 ├── nginx/
 │   └── nginx.conf     # Nginx configuration
+├── .github/
+│   └── workflows/     # CI/CD pipelines
 ├── docker-compose.yml # Full stack orchestration
 └── .env.example       # Environment variables template
 ```
@@ -71,6 +78,13 @@ npm install
 npm start
 ```
 
+## Testing
+
+```bash
+cd backend
+npm test
+```
+
 ## API Endpoints
 
 ### Authentication
@@ -93,6 +107,10 @@ npm start
 
 See `.env.example` for required configuration.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details.
