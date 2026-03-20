@@ -15,6 +15,9 @@ API.interceptors.response.use(r => r, e => {
     localStorage.removeItem('token');
     window.location.reload();
   }
+  if (!e.response) {
+    console.error('Network error - server may be down');
+  }
   return Promise.reject(e);
 });
 

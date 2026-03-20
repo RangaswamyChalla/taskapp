@@ -13,6 +13,6 @@ const auth = (req, res, next) => {
 };
 
 const issueToken = (user) =>
-  jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 module.exports = { auth, issueToken };

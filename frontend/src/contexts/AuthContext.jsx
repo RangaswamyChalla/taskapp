@@ -17,14 +17,17 @@ export const AuthProvider = ({ children }) => {
       const { data } = await API.post('/auth/login', { email: 'demo@app.com', password: 'demo123' });
       localStorage.setItem('token', data.token);
       setUser(data.user);
+      return data;
     } catch {
       try {
         await API.post('/auth/register', { email: 'demo@app.com', password: 'demo123', name: 'Demo User' });
         const { data } = await API.post('/auth/login', { email: 'demo@app.com', password: 'demo123' });
         localStorage.setItem('token', data.token);
         setUser(data.user);
+        return data;
       } catch (err) {
         console.error('Login failed:', err);
+        throw err;
       }
     }
   }, []);
