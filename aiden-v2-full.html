@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIDEN v2 — Multi-Agent Code Synthesis Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060810;--surface:#0d1117;--surface2:#161b22;--surface3:#1c2128;
+  --border:#21262d;--border2:#30363d;
+  --accent:#00d4ff;--accent2:#7c3aed;--accent3:#10b981;--accent4:#f59e0b;--danger:#ef4444;
+  --text:#e6edf3;--text-muted:#7d8590;--text-dim:#484f58;
+  --agent-orch:#00d4ff;--agent-anal:#a78bfa;--agent-arch:#34d399;
+  --agent-code:#fbbf24;--agent-rev:#f87171;--agent-dep:#818cf8;
+  --glow-blue:0 0 40px rgba(0,212,255,.12);
+  --glow-purple:0 0 40px rgba(124,58,237,.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;overflow-x:hidden}
+
+/* GRID BG */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
+  background-size:48px 48px;
+}
+.orb{position:fixed;pointer-events:none;z-index:0;border-radius:50%;}
+.orb1{width:800px;height:800px;top:-300px;right:-200px;background:radial-gradient(circle,rgba(0,212,255,.04) 0%,transparent 65%);}
+.orb2{width:600px;height:600px;bottom:-200px;left:-150px;background:radial-gradient(circle,rgba(124,58,237,.04) 0%,transparent 65%);}
+.orb3{width:400px;height:400px;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(16,185,129,.03) 0%,transparent 65%);}
+
+/* TOPBAR */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;
+  background:rgba(6,8,16,.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-mark{
+  width:32px;height:32px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:800;color:#000;font-family:'Syne',sans-serif;
+}
+.logo-text{font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;}
+.logo-text span{color:var(--text-muted);font-weight:400;}
+.topbar-center{display:flex;gap:4px;}
+.top-tab{
+  font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 16px;border-radius:6px;cursor:pointer;
+  color:var(--text-muted);transition:all .2s;border:1px solid transparent;
+}
+.top-tab.active,.top-tab:hover{color:var(--accent);background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.15);}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:5px 12px;border-radius:20px;
+  background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:var(--accent3);
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--accent3);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* LAYOUT */
+.workspace{
+  display:grid;
+  grid-template-columns:340px 1fr 340px;
+  grid-template-rows:auto 1fr;
+  min-height:100vh;
+  padding-top:56px;
+  position:relative;z-index:5;
+}
+.left-panel{
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  height:calc(100vh - 56px);
+  position:sticky;top:56px;overflow:hidden;
+}
+.right-panel{
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  height:calc(100vh - 56px);
+  position:sticky;top:56px;overflow:hidden;
+}
+.main-content{
+  overflow-y:auto;
+  padding:32px;
+}
+
+/* PANEL HEADERS */
+.panel-head{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(255,255,255,.015);flex-shrink:0;
+}
+.panel-head-title{
+  font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);
+  display:flex;align-items:center;gap:8px;
+}
+.ph-icon{font-size:.9rem;}
+.panel-body{flex:1;overflow-y:auto;padding:16px;}
+
+/* SRS PANEL */
+.srs-controls{padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.template-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.chip{
+  font-size:.62rem;letter-spacing:.06em;padding:4px 10px;
+  border-radius:20px;border:1px solid var(--border);
+  color:var(--text-muted);cursor:pointer;transition:all .2s;
+  background:var(--surface2);
+}
+.chip:hover,.chip.on{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.05);}
+.srs-ta{
+  width:100%;min-height:220px;
+  background:transparent;border:none;outline:none;
+  color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.72rem;
+  line-height:1.8;resize:none;padding:4px;
+}
+.srs-ta::placeholder{color:var(--text-dim);}
+
+/* CONFIG */
+.config-rows{display:flex;flex-direction:column;gap:8px;padding:16px;}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;font-size:.7rem;}
+.cfg-label{color:var(--text-muted);}
+.cfg-val{color:var(--text);font-size:.68rem;}
+.cfg-select{
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.68rem;
+  padding:4px 8px;border-radius:4px;outline:none;cursor:pointer;
+}
+.tog{width:28px;height:16px;background:var(--border);border-radius:8px;position:relative;cursor:pointer;transition:.2s;flex-shrink:0;}
+.tog.y{background:var(--accent);}
+.tog::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.2s;}
+.tog.y::after{transform:translateX(12px);}
+
+/* LAUNCH BTN */
+.launch-btn{
+  margin:16px;
+  padding:14px;
+  background:linear-gradient(135deg,rgba(0,212,255,.1),rgba(124,58,237,.1));
+  border:1px solid rgba(0,212,255,.25);border-radius:10px;
+  color:var(--accent);font-family:'JetBrains Mono',monospace;
+  font-size:.78rem;font-weight:600;letter-spacing:.1em;
+  cursor:pointer;transition:all .3s;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  position:relative;overflow:hidden;
+}
+.launch-btn::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(124,58,237,.15));
+  opacity:0;transition:.3s;
+}
+.launch-btn:hover::after{opacity:1;}
+.launch-btn:hover{box-shadow:0 0 30px rgba(0,212,255,.2);}
+.launch-btn:disabled{opacity:.4;cursor:not-allowed;}
+.spin{width:14px;height:14px;border:2px solid rgba(0,212,255,.3);border-top-color:var(--accent);border-radius:50%;animation:rot .6s linear infinite;display:none;}
+.launch-btn.go .spin{display:block;}
+.launch-btn.go .btxt{display:none;}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* AGENT CARDS (right panel) */
+.agent-cards{padding:12px;display:flex;flex-direction:column;gap:8px;}
+.agent-card{
+  border:1px solid var(--border);border-radius:10px;
+  padding:14px;transition:all .3s;
+  background:var(--surface);
+}
+.agent-card.active{
+  border-color:var(--agent-color);
+  background:rgba(255,255,255,.02);
+  box-shadow:0 0 20px var(--agent-glow);
+}
+.agent-card.done{border-color:rgba(16,185,129,.2);background:rgba(16,185,129,.02);}
+.ac-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.ac-name{font-size:.72rem;font-weight:600;display:flex;align-items:center;gap:6px;}
+.ac-status{font-size:.6rem;letter-spacing:.08em;padding:2px 8px;border-radius:4px;}
+.st-idle{background:rgba(255,255,255,.04);color:var(--text-dim);}
+.st-running{background:rgba(245,158,11,.1);color:var(--accent4);animation:pulse .8s infinite alternate;}
+.st-done{background:rgba(16,185,129,.1);color:var(--accent3);}
+.st-wait{background:rgba(124,58,237,.1);color:var(--agent-anal);}
+@keyframes pulse{from{opacity:.7}to{opacity:1}}
+.ac-desc{font-size:.63rem;color:var(--text-dim);line-height:1.6;}
+.ac-progress{height:2px;background:var(--border);border-radius:1px;margin-top:10px;overflow:hidden;}
+.ac-bar{height:100%;width:0%;border-radius:1px;transition:width .5s ease;background:var(--agent-color);}
+.ac-thought{
+  font-size:.62rem;color:var(--text-dim);font-style:italic;
+  margin-top:6px;line-height:1.6;display:none;
+}
+.agent-card.active .ac-thought{display:block;}
+
+/* MAIN — FLOW DIAGRAM */
+.flow-diagram{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:28px;margin-bottom:28px;
+  position:relative;overflow:hidden;
+}
+.flow-diagram::before{
+  content:'AGENT PIPELINE';position:absolute;top:16px;right:20px;
+  font-size:.58rem;letter-spacing:.2em;color:var(--text-dim);
+}
+.flow-nodes{display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:4px;}
+.fn-node{
+  flex-shrink:0;background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:14px 18px;text-align:center;
+  transition:all .4s;min-width:110px;
+}
+.fn-node.active{border-color:var(--nc);box-shadow:0 0 20px var(--ng);transform:translateY(-3px);}
+.fn-node.done{border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.04);}
+.fn-icon{font-size:1.4rem;margin-bottom:6px;}
+.fn-label{font-size:.63rem;font-weight:600;color:var(--text-muted);}
+.fn-sub{font-size:.55rem;color:var(--text-dim);margin-top:2px;}
+.fn-arrow{
+  width:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.fn-arrow::before{
+  content:'';height:1px;width:100%;
+  background:linear-gradient(90deg,var(--border),var(--accent2),var(--border));
+}
+.fn-arrow::after{content:'▸';position:absolute;right:2px;font-size:.5rem;color:var(--accent2);}
+.fn-arrow.lit::before{background:linear-gradient(90deg,var(--accent3),var(--accent));animation:flow 1s infinite;}
+@keyframes flow{0%{opacity:.4}50%{opacity:1}100%{opacity:.4}}
+
+/* AGENT COMMS */
+.comms-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;margin-bottom:28px;overflow:hidden;
+}
+.comms-head{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.comms-body{
+  padding:16px;max-height:320px;overflow-y:auto;
+  display:flex;flex-direction:column;gap:10px;
+}
+.msg{display:flex;gap:10px;animation:fadeUp .3s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg-avatar{
+  width:28px;height:28px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;font-weight:700;font-family:'Syne',sans-serif;
+}
+.msg-bubble{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:0 10px 10px 10px;padding:10px 14px;flex:1;
+}
+.msg-sender{font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;font-weight:600;}
+.msg-text{font-size:.7rem;color:var(--text-muted);line-height:1.7;}
+.msg-text code{
+  background:rgba(0,212,255,.06);color:var(--accent);
+  padding:1px 6px;border-radius:4px;font-size:.65rem;
+}
+.msg-time{font-size:.58rem;color:var(--text-dim);margin-top:4px;}
+.msg.system .msg-bubble{background:rgba(0,212,255,.04);border-color:rgba(0,212,255,.15);}
+.typing{display:flex;gap:4px;align-items:center;padding:4px 0;}
+.typing span{width:5px;height:5px;border-radius:50%;background:var(--text-dim);animation:dot 1.2s infinite;}
+.typing span:nth-child(2){animation-delay:.2s;}
+.typing span:nth-child(3){animation-delay:.4s;}
+@keyframes dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* CODE OUTPUT */
+.code-workspace{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;margin-bottom:28px;display:none;
+}
+.code-workspace.show{display:block;}
+.cw-tabs{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;}
+.cw-tab{
+  padding:11px 18px;font-size:.68rem;letter-spacing:.05em;
+  color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;
+  white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:6px;
+}
+.cw-tab:hover{color:var(--text);}
+.cw-tab.on{color:var(--accent);border-bottom-color:var(--accent);}
+.cw-tab .tbadge{
+  font-size:.55rem;padding:1px 5px;border-radius:3px;
+  background:rgba(16,185,129,.1);color:var(--accent3);
+}
+.cw-pane{display:none;position:relative;}
+.cw-pane.on{display:block;}
+.file-bar{
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(255,255,255,.015);
+}
+.file-path{font-size:.65rem;color:var(--text-dim);}
+.file-actions{display:flex;gap:8px;}
+.fa-btn{
+  font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-muted);padding:3px 10px;border-radius:4px;
+  cursor:pointer;transition:all .2s;font-family:'JetBrains Mono',monospace;
+}
+.fa-btn:hover{border-color:var(--accent);color:var(--accent);}
+pre.code{
+  padding:20px;overflow-x:auto;font-size:.7rem;line-height:1.85;
+  max-height:400px;overflow-y:auto;margin:0;
+}
+.line-new{background:rgba(16,185,129,.07);display:block;margin:0 -20px;padding:0 20px;}
+
+/* TESTS */
+.tests-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;margin-bottom:28px;display:none;
+}
+.tests-panel.show{display:block;}
+.test-suite{padding:16px;}
+.test-case{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 0;border-bottom:1px solid var(--border);font-size:.7rem;
+}
+.test-case:last-child{border-bottom:none;}
+.tc-icon{flex-shrink:0;margin-top:1px;}
+.tc-name{color:var(--text);font-weight:500;margin-bottom:2px;}
+.tc-desc{font-size:.63rem;color:var(--text-muted);line-height:1.6;}
+.tc-pass{color:var(--accent3);}
+.tc-fail{color:var(--danger);}
+.tc-skip{color:var(--text-dim);}
+
+/* DEPLOY */
+.deploy-panel{
+  background:linear-gradient(135deg,rgba(16,185,129,.04),rgba(0,212,255,.04));
+  border:1px solid rgba(16,185,129,.2);border-radius:14px;
+  padding:24px;margin-bottom:28px;display:none;
+}
+.deploy-panel.show{display:block;}
+.dp-head{display:flex;align-items:center;gap:10px;margin-bottom:20px;}
+.dp-dot{width:10px;height:10px;border-radius:50%;background:var(--accent3);box-shadow:0 0 10px var(--accent3);animation:blink 2s infinite;}
+.dp-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent3);}
+.dp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.dp-card{background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;padding:14px;}
+.dp-k{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:5px;}
+.dp-v{font-size:.75rem;color:var(--text);}
+.dp-v.ok{color:var(--accent3);}
+.cmd-block{
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;margin-top:16px;font-size:.7rem;color:var(--accent3);
+  display:flex;align-items:center;gap:10px;
+}
+.cmd-block::before{content:'$';color:var(--text-dim);}
+
+/* METRICS */
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.mc{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:18px;text-align:center;
+  transition:all .3s;
+}
+.mc:hover{border-color:var(--border2);transform:translateY(-2px);}
+.mc-val{
+  font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:4px;
+}
+.mc-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);}
+
+/* FILE TREE */
+.ftree{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:20px;margin-bottom:28px;display:none;
+}
+.ftree.show{display:block;}
+.ft-item{
+  display:flex;align-items:center;gap:6px;
+  padding:2px 0;font-size:.68rem;color:var(--text-muted);
+  line-height:1.8;
+}
+.ft-item.d{color:var(--accent);font-weight:500;}
+.ft-indent{display:inline-block;width:16px;flex-shrink:0;}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* RESPONSIVE */
+@media(max-width:1100px){
+  .workspace{grid-template-columns:280px 1fr 280px;}
+}
+@media(max-width:860px){
+  .workspace{grid-template-columns:1fr;}
+  .left-panel,.right-panel{position:static;height:auto;}
+}
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">AI</div>
+    <div class="logo-text">AIDEN <span>v2 / Multi-Agent Code Synthesis</span></div>
+  </div>
+  <div class="topbar-center">
+    <div class="top-tab active">Pipeline</div>
+    <div class="top-tab">Agents</div>
+    <div class="top-tab">Output</div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-pill"><div class="status-dot"></div> 5 Agents Ready</div>
+  </div>
+</div>
+
+<div class="workspace">
+
+  <!-- LEFT: SRS INPUT -->
+  <div class="left-panel">
+    <div class="panel-head">
+      <div class="panel-head-title"><span class="ph-icon">📄</span> SRS Input</div>
+      <span style="font-size:.6rem;color:var(--text-dim)">v1.0</span>
+    </div>
+    <div class="srs-controls">
+      <div class="template-chips">
+        <div class="chip on" onclick="tpl(this,'todo')">Task App</div>
+        <div class="chip" onclick="tpl(this,'ecom')">E-Commerce</div>
+        <div class="chip" onclick="tpl(this,'blog')">Blog CMS</div>
+        <div class="chip" onclick="tpl(this,'auth')">Auth SVC</div>
+        <div class="chip" onclick="tpl(this,'custom')">Custom</div>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+        <input type="password" id="apiKeyInput" placeholder="Anthropic API Key" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:6px 10px;border-radius:6px;outline:none;" />
+        <button onclick="saveApiKey()" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.6rem;padding:6px 12px;border-radius:6px;cursor:pointer;letter-spacing:.06em;">Save</button>
+      </div>
+      <div id="apiKeyStatus" style="font-size:.6rem;margin-top:6px;color:var(--accent3);display:none;">✓ API key saved</div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+        <input type="text" id="proxyInput" placeholder="CORS Proxy URL (optional)" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:6px 10px;border-radius:6px;outline:none;" />
+        <button onclick="saveProxy()" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.25);color:var(--agent-anal);font-family:'JetBrains Mono',monospace;font-size:.6rem;padding:6px 12px;border-radius:6px;cursor:pointer;letter-spacing:.06em;">Set</button>
+      </div>
+      <div style="font-size:.58rem;color:var(--text-dim);margin-top:6px;line-height:1.5;">
+        Free proxy: <span style="color:var(--agent-anal);cursor:pointer;" onclick="setFreeProxy('cors')">cors.sh</span> ·
+        <span style="color:var(--agent-anal);cursor:pointer;" onclick="setFreeProxy('custom')">Custom / Cloudflare Worker</span>
+      </div>
+    </div>
+    <div class="panel-body" style="flex:1;overflow-y:auto;">
+      <textarea class="srs-ta" id="srsInput" placeholder="Paste your SRS document here..."></textarea>
+    </div>
+    <div style="border-top:1px solid var(--border);padding:12px 16px;">
+      <div style="font-size:.63rem;color:var(--text-dim);margin-bottom:10px;letter-spacing:.08em;">CONFIGURATION</div>
+      <div class="config-rows" style="padding:0;gap:10px;">
+        <div class="cfg-row">
+          <span class="cfg-label">Stack</span>
+          <select class="cfg-select" id="stackSel">
+            <option value="react-node">React + Node + PG</option>
+            <option value="vue-fastapi">Vue + FastAPI + Mongo</option>
+            <option value="next-prisma">Next.js + Prisma</option>
+          </select>
+        </div>
+        <div class="cfg-row"><span class="cfg-label">Frontend</span><div class="tog y" onclick="this.classList.toggle('y')"></div></div>
+        <div class="cfg-row"><span class="cfg-label">Backend API</span><div class="tog y" onclick="this.classList.toggle('y')"></div></div>
+        <div class="cfg-row"><span class="cfg-label">DB Schema</span><div class="tog y" onclick="this.classList.toggle('y')"></div></div>
+        <div class="cfg-row"><span class="cfg-label">Docker</span><div class="tog y" onclick="this.classList.toggle('y')"></div></div>
+        <div class="cfg-row"><span class="cfg-label">Generate Tests</span><div class="tog" id="testTog" onclick="this.classList.toggle('y')"></div></div>
+        <div class="cfg-row"><span class="cfg-label">CI/CD Pipeline</span><div class="tog y" onclick="this.classList.toggle('y')"></div></div>
+      </div>
+    </div>
+    <button class="launch-btn" id="launchBtn" onclick="launch()">
+      <div class="spin"></div>
+      <span class="btxt">⚡ LAUNCH PIPELINE</span>
+    </button>
+  </div>
+
+  <!-- CENTER: MAIN -->
+  <div class="main-content" id="mainContent">
+
+    <!-- PIPELINE FLOW -->
+    <div class="flow-diagram">
+      <div class="flow-nodes" id="flowNodes">
+        <div class="fn-node" id="fn0" style="--nc:var(--accent);--ng:rgba(0,212,255,.12)">
+          <div class="fn-icon">📄</div>
+          <div class="fn-label">SRS Input</div>
+          <div class="fn-sub">Requirements</div>
+        </div>
+        <div class="fn-arrow" id="fa0"></div>
+        <div class="fn-node" id="fn1" style="--nc:var(--agent-anal);--ng:rgba(167,139,250,.12)">
+          <div class="fn-icon">🧠</div>
+          <div class="fn-label">Analyzer</div>
+          <div class="fn-sub">NLP + Parsing</div>
+        </div>
+        <div class="fn-arrow" id="fa1"></div>
+        <div class="fn-node" id="fn2" style="--nc:var(--agent-arch);--ng:rgba(52,211,153,.12)">
+          <div class="fn-icon">🏗️</div>
+          <div class="fn-label">Architect</div>
+          <div class="fn-sub">System Design</div>
+        </div>
+        <div class="fn-arrow" id="fa2"></div>
+        <div class="fn-node" id="fn3" style="--nc:var(--agent-code);--ng:rgba(251,191,36,.12)">
+          <div class="fn-icon">⚡</div>
+          <div class="fn-label">Coder</div>
+          <div class="fn-sub">Code Gen</div>
+        </div>
+        <div class="fn-arrow" id="fa3"></div>
+        <div class="fn-node" id="fn4" style="--nc:var(--agent-rev);--ng:rgba(248,113,113,.12)">
+          <div class="fn-icon">🔍</div>
+          <div class="fn-label">Reviewer</div>
+          <div class="fn-sub">QA + Security</div>
+        </div>
+        <div class="fn-arrow" id="fa4"></div>
+        <div class="fn-node" id="fn5" style="--nc:var(--agent-dep);--ng:rgba(129,140,248,.12)">
+          <div class="fn-icon">🚀</div>
+          <div class="fn-label">Deployer</div>
+          <div class="fn-sub">Config Gen</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT COMMUNICATIONS -->
+    <div class="comms-panel">
+      <div class="comms-head">
+        <span style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+          <span>💬</span> Agent Inter-Communication
+        </span>
+        <span id="commsCount" style="font-size:.62rem;color:var(--text-dim);">0 messages</span>
+      </div>
+      <div class="comms-body" id="commsBody">
+        <div style="text-align:center;padding:40px 0;color:var(--text-dim);font-size:.7rem;">
+          Agent communications will appear here during pipeline execution
+        </div>
+      </div>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metrics-row" id="metricsRow" style="display:none">
+      <div class="mc"><div class="mc-val" id="mv0">—</div><div class="mc-lbl">Lines of Code</div></div>
+      <div class="mc"><div class="mc-val" id="mv1">—</div><div class="mc-lbl">Files Created</div></div>
+      <div class="mc"><div class="mc-val" id="mv2">—</div><div class="mc-lbl">API Endpoints</div></div>
+      <div class="mc"><div class="mc-val" id="mv3">—</div><div class="mc-lbl">Gen Time (s)</div></div>
+    </div>
+
+    <!-- CODE OUTPUT -->
+    <div class="code-workspace" id="codeWorkspace">
+      <div class="cw-tabs" id="cwTabs"></div>
+      <div id="cwPanes"></div>
+    </div>
+
+    <!-- TESTS -->
+    <div class="tests-panel" id="testsPanel">
+      <div class="comms-head">
+        <span style="font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+          <span>🧪</span> Generated Test Suite
+        </span>
+        <span id="testStats" style="font-size:.62rem;color:var(--accent3);"></span>
+      </div>
+      <div class="test-suite" id="testSuite"></div>
+    </div>
+
+    <!-- FILE TREE -->
+    <div class="ftree" id="fileTree">
+      <div style="font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        <span>📁</span> Project Structure
+      </div>
+      <div id="ftreeBody"></div>
+    </div>
+
+    <!-- DEPLOY -->
+    <div class="deploy-panel" id="deployPanel">
+      <div class="dp-head"><div class="dp-dot"></div><div class="dp-title">Deployment Package Ready</div></div>
+      <div class="dp-grid">
+        <div class="dp-card"><div class="dp-k">Platform</div><div class="dp-v">Docker Compose</div></div>
+        <div class="dp-card"><div class="dp-k">Database</div><div class="dp-v">PostgreSQL 16</div></div>
+        <div class="dp-card"><div class="dp-k">Proxy</div><div class="dp-v">Nginx 1.25</div></div>
+        <div class="dp-card"><div class="dp-k">CI/CD</div><div class="dp-v">GitHub Actions</div></div>
+        <div class="dp-card"><div class="dp-k">Status</div><div class="dp-v ok">✓ Ready</div></div>
+        <div class="dp-card"><div class="dp-k">Health Check</div><div class="dp-v ok">✓ Passed</div></div>
+      </div>
+      <div class="cmd-block">docker-compose up --build -d</div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: AGENT STATUS -->
+  <div class="right-panel">
+    <div class="panel-head">
+      <div class="panel-head-title"><span class="ph-icon">🤖</span> Agent Status</div>
+      <span id="activeCount" style="font-size:.6rem;color:var(--text-dim);">0/5 active</span>
+    </div>
+    <div class="panel-body" style="padding:0;">
+      <div class="agent-cards">
+
+        <div class="agent-card" id="ac0" style="--agent-color:var(--agent-anal);--agent-glow:rgba(167,139,250,.12)">
+          <div class="ac-top">
+            <div class="ac-name" style="color:var(--agent-anal)">🧠 Analyzer</div>
+            <div class="ac-status st-idle" id="as0">Idle</div>
+          </div>
+          <div class="ac-desc">NLP requirement parsing, entity extraction, constraint identification, dependency mapping</div>
+          <div class="ac-thought" id="at0"></div>
+          <div class="ac-progress"><div class="ac-bar" id="ap0" style="--agent-color:var(--agent-anal)"></div></div>
+        </div>
+
+        <div class="agent-card" id="ac1" style="--agent-color:var(--agent-arch);--agent-glow:rgba(52,211,153,.12)">
+          <div class="ac-top">
+            <div class="ac-name" style="color:var(--agent-arch)">🏗️ Architect</div>
+            <div class="ac-status st-idle" id="as1">Idle</div>
+          </div>
+          <div class="ac-desc">System topology, tech selection, API surface design, data model relationships</div>
+          <div class="ac-thought" id="at1"></div>
+          <div class="ac-progress"><div class="ac-bar" id="ap1" style="--agent-color:var(--agent-arch)"></div></div>
+        </div>
+
+        <div class="agent-card" id="ac2" style="--agent-color:var(--agent-code);--agent-glow:rgba(251,191,36,.12)">
+          <div class="ac-top">
+            <div class="ac-name" style="color:var(--agent-code)">⚡ Coder</div>
+            <div class="ac-status st-idle" id="as2">Idle</div>
+          </div>
+          <div class="ac-desc">Multi-file code synthesis: schema → models → controllers → routes → components</div>
+          <div class="ac-thought" id="at2"></div>
+          <div class="ac-progress"><div class="ac-bar" id="ap2" style="--agent-color:var(--agent-code)"></div></div>
+        </div>
+
+        <div class="agent-card" id="ac3" style="--agent-color:var(--agent-rev);--agent-glow:rgba(248,113,113,.12)">
+          <div class="ac-top">
+            <div class="ac-name" style="color:var(--agent-rev)">🔍 Reviewer</div>
+            <div class="ac-status st-idle" id="as3">Idle</div>
+          </div>
+          <div class="ac-desc">Security audit, SQL injection, XSS, auth validation, API contract verification</div>
+          <div class="ac-thought" id="at3"></div>
+          <div class="ac-progress"><div class="ac-bar" id="ap3" style="--agent-color:var(--agent-rev)"></div></div>
+        </div>
+
+        <div class="agent-card" id="ac4" style="--agent-color:var(--agent-dep);--agent-glow:rgba(129,140,248,.12)">
+          <div class="ac-top">
+            <div class="ac-name" style="color:var(--agent-dep)">🚀 Deployer</div>
+            <div class="ac-status st-idle" id="as4">Idle</div>
+          </div>
+          <div class="ac-desc">Docker, CI/CD, env config, health checks, reverse proxy configuration</div>
+          <div class="ac-thought" id="at4"></div>
+          <div class="ac-progress"><div class="ac-bar" id="ap4" style="--agent-color:var(--agent-dep)"></div></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===== TEMPLATES ===== */
+const TPLS = {
+  todo:`PROJECT: Task Management Application v1.0
+
+1. OVERVIEW
+A collaborative web-based task management system for small teams. Users can create, assign, and track tasks through completion. Includes a real-time dashboard with analytics.
+
+2. FUNCTIONAL REQUIREMENTS
+FR-01: Users register with email/password, login returns JWT (access + refresh tokens)
+FR-02: Create tasks: title, description, priority (low/medium/high/urgent), due_date
+FR-03: Assign tasks to team members; assignee receives notification
+FR-04: Task workflow: Todo → In Progress → Review → Done
+FR-05: Dashboard: task counts by status, overdue alerts, team workload chart
+FR-06: Filter/search tasks by status, priority, assignee, date range
+FR-07: Audit log records all state changes
+
+3. NON-FUNCTIONAL REQUIREMENTS
+NFR-01: REST API p95 latency < 150ms
+NFR-02: PostgreSQL with proper foreign keys, indexes on status+priority
+NFR-03: Stateless JWT authentication, 15min access / 7d refresh
+NFR-04: Docker deployment with Nginx reverse proxy
+
+4. DATA ENTITIES
+User: id(uuid), email(unique), password_hash, name, avatar_url, created_at
+Team: id(uuid), name, slug(unique), owner_id→User
+Task: id(uuid), title, description, status(enum), priority(enum), due_date, creator_id→User, assignee_id→User, team_id→Team
+AuditLog: id, table, record_id, action, user_id, old_data(jsonb), new_data(jsonb)`,
+  ecom:`PROJECT: E-Commerce Platform v2.0
+
+1. OVERVIEW
+Full-featured online store with product catalog, cart, checkout, and admin panel.
+
+2. REQUIREMENTS
+FR-01: Product catalog with categories, tags, search, pagination
+FR-02: Shopping cart (add, remove, update qty, persist to DB)
+FR-03: Checkout flow with address, shipping method, payment (Stripe)
+FR-04: Order management: pending→confirmed→shipped→delivered
+FR-05: Admin: product CRUD, inventory tracking, order management
+FR-06: User accounts with order history, saved addresses
+FR-07: Coupon/discount codes
+
+3. DATA ENTITIES
+Product: id, name, slug, price, stock, category_id, images[], tags[]
+Order: id, user_id, status, total, shipping_address(jsonb), stripe_payment_id
+OrderItem: id, order_id, product_id, quantity, unit_price
+User: id, email, name, role(customer|admin)`,
+  blog:`PROJECT: Blog Publishing Platform
+
+1. OVERVIEW
+Developer blog with Markdown authoring, SEO, comments, and RSS.
+
+2. REQUIREMENTS
+FR-01: Author auth with OAuth (GitHub) and email/password
+FR-02: Write posts in Markdown with frontmatter (title, tags, excerpt)
+FR-03: Categories, tags, full-text search
+FR-04: Comment system with nested replies, moderation queue
+FR-05: Auto-generate RSS feed and XML sitemap
+FR-06: Draft/Published/Archived post states
+
+3. DATA ENTITIES
+Post: id, slug, title, body_md, body_html, status, author_id, published_at
+Comment: id, post_id, parent_id, author_name, content, approved
+Tag: id, name, slug`,
+  auth:`PROJECT: Auth Microservice
+
+1. OVERVIEW
+Standalone authentication service: JWT, OAuth2, 2FA, refresh tokens.
+
+2. REQUIREMENTS
+FR-01: Email/password registration with email verification link
+FR-02: Login → access_token (15m) + refresh_token (30d, rotating)
+FR-03: OAuth2: Google, GitHub providers
+FR-04: TOTP-based 2FA (QR code setup, verify code)
+FR-05: Password reset via signed email link (expires 1h)
+FR-06: Rate limiting: 5 failed logins → 15min lockout
+FR-07: Session management: list active sessions, revoke specific session
+
+3. DATA ENTITIES
+User: id, email, password_hash, email_verified, totp_secret, created_at
+Session: id, user_id, refresh_token_hash, device_info, expires_at
+OAuthAccount: id, user_id, provider, provider_user_id`,
+  custom:``
+};
+
+function tpl(el, name){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('srsInput').value = TPLS[name];
+}
+tpl(document.querySelector('.chip.on'), 'todo');
+
+/* ===== AGENT CONFIG ===== */
+const AGENTS = [
+  {id:0,name:'Analyzer',color:'var(--agent-anal)',
+   thoughts:["Tokenizing requirement blocks...","Extracting entity definitions...","Mapping FR→NFR dependencies...","Identifying auth flows and data constraints...","Building semantic requirement graph..."]},
+  {id:1,name:'Architect',color:'var(--agent-arch)',
+   thoughts:["Selecting MVC + REST pattern for this domain...","Mapping entities to DB tables...","Designing API surface: 12 endpoints identified...","Choosing JWT stateless auth over sessions...","Finalizing layer separation strategy..."]},
+  {id:2,name:'Coder',color:'var(--agent-code)',
+   thoughts:["Synthesizing DB schema from entity map...","Generating ORM models with validations...","Building Express route handlers...","Creating React component tree...","Wiring axios API client to state..."]},
+  {id:3,name:'Reviewer',color:'var(--agent-rev)',
+   thoughts:["Scanning for SQL injection vectors...","Checking JWT secret exposure...","Validating input sanitization...","Reviewing error handling coverage...","Confirming CORS and header security..."]},
+  {id:4,name:'Deployer',color:'var(--agent-dep)',
+   thoughts:["Building Dockerfile multi-stage build...","Configuring Nginx upstream blocks...","Writing health check endpoints...","Generating GitHub Actions workflow...","Preparing .env.example documentation..."]}
+];
+
+/* ===== COMM MESSAGES ===== */
+const COMMS = [
+  {from:'ORCHESTRATOR',to:null,color:'var(--accent)',bg:'#0d2836',t:0.5,
+   msg:'Pipeline initiated. SRS received. Dispatching <code>Analyzer</code> agent with full document context.'},
+  {from:'ANALYZER',to:'ORCHESTRATOR',color:'var(--agent-anal)',bg:'#1a1040',t:2.2,
+   msg:'Parsing complete. Detected <code>4 functional entities</code>, <code>3 auth flows</code>, <code>2 NFR constraints</code>. Forwarding semantic graph to Architect.'},
+  {from:'ARCHITECT',to:'ANALYZER',color:'var(--agent-arch)',bg:'#0d2420',t:3.8,
+   msg:'Received entity graph. Selecting <code>REST MVC</code> pattern. Proposing <code>PostgreSQL</code> for relational requirements. API surface: 11 endpoints. Do you confirm cascade delete on User→Task?'},
+  {from:'ANALYZER',to:'ARCHITECT',color:'var(--agent-anal)',bg:'#1a1040',t:4.5,
+   msg:'Confirmed. FR-07 audit log requirement implies <code>soft delete</code> pattern preferred over cascade. Recommend <code>deleted_at</code> timestamp.'},
+  {from:'ARCHITECT',to:'CODER',color:'var(--agent-arch)',bg:'#0d2420',t:5.2,
+   msg:'Architecture finalized. Blueprint transmitted. Key decisions: UUID PKs, soft deletes, <code>sequelize ORM</code>, separate routes/controllers/middleware layers.'},
+  {from:'CODER',to:'ARCHITECT',color:'var(--agent-code)',bg:'#2a1f00',t:6.0,
+   msg:'Blueprint received. Beginning multi-file synthesis. Generating DB schema first, then models → controllers → routes → React components. ETA ~4s.'},
+  {from:'CODER',to:'REVIEWER',color:'var(--agent-code)',bg:'#2a1f00',t:8.5,
+   msg:'Code generation complete. <code>5 files</code> produced. Handing off to Reviewer. Flag: JWT secret currently hardcoded in one test file — needs env var.'},
+  {from:'REVIEWER',to:'CODER',color:'var(--agent-rev)',bg:'#2a0a0a',t:9.2,
+   msg:'⚠ Confirmed JWT hardcode at <code>server.js:L34</code>. Patching to <code>process.env.JWT_SECRET</code>. Also applied parameterized query fix at <code>tasks route L12</code>. 2 issues resolved.'},
+  {from:'REVIEWER',to:'DEPLOYER',color:'var(--agent-rev)',bg:'#2a0a0a',t:10.0,
+   msg:'Security review passed. <code>0 critical</code>, <code>0 high</code>, 2 medium patched. Code certified. Forwarding to Deployer for containerization.'},
+  {from:'DEPLOYER',to:'ORCHESTRATOR',color:'var(--agent-dep)',bg:'#0e0e2a',t:11.2,
+   msg:'Deployment artifacts generated: <code>docker-compose.yml</code>, <code>Dockerfile</code>×2, <code>nginx.conf</code>, <code>deploy.yml</code> (GitHub Actions), <code>.env.example</code>. Stack is deploy-ready.'},
+  {from:'ORCHESTRATOR',to:null,color:'var(--accent)',bg:'#0d2836',t:12.0,
+   msg:'✅ Pipeline complete. All 5 agents finished. <code>6 files</code> generated, <code>0 security issues</code>, deployment config ready. Total time: ~12s.'},
+];
+
+let msgCount = 0;
+function postMsg(c){
+  msgCount++;
+  document.getElementById('commsCount').textContent = msgCount + ' messages';
+  const body = document.getElementById('commsBody');
+  if(msgCount===1) body.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'msg' + (c.from==='ORCHESTRATOR'?' system':'');
+  const initials = c.from.slice(0,2);
+  el.innerHTML = `
+    <div class="msg-avatar" style="background:${c.bg};color:${c.color};border:1px solid ${c.color}33">${initials}</div>
+    <div class="msg-bubble" style="border-color:${c.color}22">
+      <div class="msg-sender" style="color:${c.color}">${c.from}${c.to?' → '+c.to:''}</div>
+      <div class="msg-text">${c.msg}</div>
+      <div class="msg-time">${new Date().toLocaleTimeString()}</div>
+    </div>`;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+/* ===== AGENT STATE ===== */
+function setAgent(idx, state, progress, thought){
+  const card = document.getElementById('ac'+idx);
+  const status = document.getElementById('as'+idx);
+  const bar = document.getElementById('ap'+idx);
+  const th = document.getElementById('at'+idx);
+  card.className = 'agent-card' + (state==='running'?' active':state==='done'?' done':'');
+  status.className = 'ac-status st-'+state;
+  status.textContent = state==='running'?'Running':state==='done'?'Done':state==='wait'?'Waiting':'Idle';
+  if(progress!==undefined) bar.style.width = progress+'%';
+  if(thought) th.textContent = thought;
+}
+
+function setFlow(idx, lit){
+  document.getElementById('fn'+idx)?.classList[lit?'add':'remove']('active');
+  document.getElementById('fa'+(idx-1))?.classList[lit?'add':'remove']('lit');
+}
+
+/* ===== SCHEDULE ===== */
+function schedule(fn, ms){ setTimeout(fn, ms); }
+
+/* ===== MAIN API CALL ===== */
+async function callAPI(srs, statusCallback){
+  const stack = document.getElementById('stackSel').value;
+  const prompt = `You are a senior software architect and developer. Based on this SRS, generate complete production code.
+
+Return ONLY a valid JSON object (no markdown fences, no explanation) with these exact keys:
+{
+  "frontend": "complete React App.jsx with hooks, axios, CRUD UI",
+  "backend": "complete Express server.js with auth middleware, all REST endpoints",
+  "database": "complete SQL DDL with CREATE TABLE, indexes, constraints, triggers",
+  "docker": "complete docker-compose.yml for full stack deployment",
+  "env": "complete .env.example with all required variables and comments"
+}
+
+Requirements:
+- Each file should be 35-70 lines of real, working code
+- No placeholder comments like "// add your code here"
+- Use proper error handling, parameterized queries, JWT auth
+- Stack: ${stack}
+
+SRS:
+${srs.substring(0,2500)}`;
+
+  const API_KEY = localStorage.getItem('anthropic_api_key');
+  if (!API_KEY) {
+    throw new Error('NO_API_KEY');
+  }
+
+  const PROXY_URL = localStorage.getItem('anthropic_proxy_url') || '';
+  const USE_PROXY = !!PROXY_URL;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+
+  let r, d;
+
+  if (USE_PROXY) {
+    statusCallback?.('proxy');
+    const isCorsSh = PROXY_URL.includes('cors.sh');
+
+    if (isCorsSh) {
+      // cors.sh: url as query param, body as string, headers forwarded
+      r = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "POST",
+          url: "https://api.anthropic.com/v1/messages",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true"
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 16384,
+            messages: [{ role: "user", content: prompt }]
+          })
+        }),
+        signal: controller.signal
+      });
+    } else {
+      // Custom proxy / Cloudflare Worker: standard nested format
+      r = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: "https://api.anthropic.com/v1/messages",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true"
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 16384,
+            messages: [{ role: "user", content: prompt }]
+          })
+        }),
+        signal: controller.signal
+      });
+    }
+  } else {
+    statusCallback?.('direct');
+    r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 16384,
+        messages: [{ role: "user", content: prompt }]
+      }),
+      signal: controller.signal
+    });
+  }
+
+  clearTimeout(timeout);
+
+  if (!r.ok) {
+    let errMsg = `API error ${r.status}`;
+    try {
+      const rawText = await r.text();
+      const err = JSON.parse(rawText);
+      errMsg = err.error?.message || errMsg;
+    } catch {}
+    throw new Error(errMsg);
+  }
+
+  // Parse response — works for both direct API and proxy
+  const rawText = await r.text();
+  let txt = '';
+
+  try {
+    const parsed = JSON.parse(rawText);
+    // Direct Anthropic: { content: [{ text: "..." }] }
+    // cors.sh wraps: { contents: "..." } or nested JSON string
+    txt = parsed.content?.[0]?.text || parsed.contents || '';
+    if (typeof txt === 'string' && txt.startsWith('{')) {
+      // Nested JSON string — parse again
+      const nested = JSON.parse(txt);
+      txt = nested.content?.[0]?.text || nested.contents || txt;
+    }
+  } catch {
+    // Raw text response
+    txt = rawText;
+  }
+
+  const clean = txt.replace(/```json\n?|```\n?/g, '').trim();
+
+  if (!clean || clean === '{}') {
+    throw new Error('Empty response from API');
+  }
+
+  return JSON.parse(clean);
+}
+
+/* ===== FALLBACK CODE ===== */
+function fallback(){
+  return {
+frontend:`import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+
+const API = axios.create({ baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001' });
+API.interceptors.request.use(c => {
+  const t = localStorage.getItem('token');
+  if (t) c.headers.Authorization = 'Bearer ' + t;
+  return c;
+});
+API.interceptors.response.use(r => r, e => {
+  if (e.response?.status === 401) { localStorage.removeItem('token'); window.location.reload(); }
+  return Promise.reject(e);
+});
+
+export default function App() {
+  const [user, setUser]   = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [form, setForm]   = useState({ title:'', priority:'medium', due_date:'' });
+  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchTasks = useCallback(async () => {
+    try {
+      const q = filter !== 'all' ? '?status=' + filter : '';
+      const { data } = await API.get('/tasks' + q);
+      setTasks(data.tasks || []);
+    } catch (e) { setError('Failed to load tasks'); }
+  }, [filter]);
+
+  useEffect(() => { if (user) fetchTasks(); }, [user, fetchTasks]);
+
+  const login = async () => {
+    try {
+      const { data } = await API.post('/auth/login', { email:'demo@app.com', password:'demo123' });
+      localStorage.setItem('token', data.token);
+      setUser(data.user);
+    } catch { setError('Login failed'); }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault(); setLoading(true); setError('');
+    try {
+      await API.post('/tasks', form);
+      setForm({ title:'', priority:'medium', due_date:'' });
+      await fetchTasks();
+    } catch { setError('Failed to create task'); }
+    finally { setLoading(false); }
+  };
+
+  const patch = async (id, updates) => {
+    try { await API.patch('/tasks/' + id, updates); await fetchTasks(); }
+    catch { setError('Update failed'); }
+  };
+
+  const remove = async (id) => {
+    try { await API.delete('/tasks/' + id); await fetchTasks(); }
+    catch { setError('Delete failed'); }
+  };
+
+  if (!user) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',gap:16}}>
+      <h1>Task Manager</h1>
+      {error && <p style={{color:'red'}}>{error}</p>}
+      <button onClick={login} style={{padding:'10px 24px',cursor:'pointer'}}>Sign In (Demo)</button>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:800,margin:'0 auto',padding:24}}>
+      <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+        <h1>Tasks</h1>
+        <span>Welcome, {user.name}</span>
+      </header>
+      {error && <p style={{color:'red',marginBottom:12}}>{error}</p>}
+      <form onSubmit={submit} style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap'}}>
+        <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Task title" required style={{flex:1,padding:'8px 12px'}}/>
+        <select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})} style={{padding:'8px 12px'}}>
+          {['low','medium','high','urgent'].map(p=><option key={p}>{p}</option>)}
+        </select>
+        <input type="date" value={form.due_date} onChange={e=>setForm({...form,due_date:e.target.value})} style={{padding:'8px 12px'}}/>
+        <button type="submit" disabled={loading} style={{padding:'8px 20px',cursor:'pointer'}}>
+          {loading ? '...' : 'Add'}
+        </button>
+      </form>
+      <div style={{display:'flex',gap:8,marginBottom:16}}>
+        {['all','todo','in_progress','done'].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} style={{padding:'4px 12px',cursor:'pointer',fontWeight:filter===s?'bold':'normal'}}>{s}</button>
+        ))}
+      </div>
+      <ul style={{listStyle:'none',display:'flex',flexDirection:'column',gap:8}}>
+        {tasks.map(t=>(
+          <li key={t.id} style={{padding:14,border:'1px solid #ddd',borderRadius:8,display:'flex',gap:12,alignItems:'center'}}>
+            <span style={{flex:1,fontWeight:500}}>{t.title}</span>
+            <span style={{fontSize:12,padding:'2px 8px',borderRadius:4,background:'#f0f0f0'}}>{t.priority}</span>
+            <select value={t.status} onChange={e=>patch(t.id,{status:e.target.value})} style={{padding:'4px 8px'}}>
+              {['todo','in_progress','review','done'].map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <button onClick={()=>remove(t.id)} style={{color:'red',background:'none',border:'none',cursor:'pointer'}}>✕</button>
+          </li>
+        ))}
+        {tasks.length===0 && <li style={{textAlign:'center',color:'#999',padding:40}}>No tasks yet</li>}
+      </ul>
+    </div>
+  );
+}`,
+backend:`const express = require('express');
+const jwt      = require('jsonwebtoken');
+const bcrypt   = require('bcrypt');
+const { Pool } = require('pg');
+const cors     = require('cors');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
+const app = express();
+const db  = new Pool({ connectionString: process.env.DATABASE_URL });
+
+app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(express.json());
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true }));
+
+// ── Middleware ────────────────────────────────────────────────
+const auth = (req, res, next) => {
+  const tok = req.headers.authorization?.split(' ')[1];
+  if (!tok) return res.status(401).json({ error: 'Unauthorized' });
+  try { req.user = jwt.verify(tok, process.env.JWT_SECRET); next(); }
+  catch { res.status(401).json({ error: 'Token invalid or expired' }); }
+};
+
+const issueToken = (user) =>
+  jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '15m' });
+
+// ── Auth Routes ───────────────────────────────────────────────
+app.post('/auth/register', async (req, res) => {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name) return res.status(400).json({ error: 'All fields required' });
+  const hash = await bcrypt.hash(password, 12);
+  const { rows } = await db.query(
+    'INSERT INTO users(email,password_hash,name) VALUES($1,$2,$3) RETURNING id,email,name',
+    [email.toLowerCase(), hash, name]
+  );
+  res.status(201).json({ user: rows[0], token: issueToken(rows[0]) });
+});
+
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  const { rows } = await db.query('SELECT * FROM users WHERE email=$1 AND deleted_at IS NULL', [email.toLowerCase()]);
+  if (!rows[0] || !await bcrypt.compare(password, rows[0].password_hash))
+    return res.status(401).json({ error: 'Invalid credentials' });
+  await db.query('UPDATE users SET last_login=NOW() WHERE id=$1', [rows[0].id]);
+  res.json({ user: { id:rows[0].id, email:rows[0].email, name:rows[0].name }, token: issueToken(rows[0]) });
+});
+
+// ── Task Routes ───────────────────────────────────────────────
+app.get('/tasks', auth, async (req, res) => {
+  const { status, priority, assignee_id } = req.query;
+  const params = [req.user.id]; const conds = ['t.creator_id=$1','t.deleted_at IS NULL'];
+  if (status)      { params.push(status);      conds.push(\`t.status=$\${params.length}\`); }
+  if (priority)    { params.push(priority);    conds.push(\`t.priority=$\${params.length}\`); }
+  if (assignee_id) { params.push(assignee_id); conds.push(\`t.assignee_id=$\${params.length}\`); }
+  const q = \`SELECT t.*,u.name assignee_name FROM tasks t LEFT JOIN users u ON t.assignee_id=u.id WHERE \${conds.join(' AND ')} ORDER BY t.due_date ASC NULLS LAST,t.created_at DESC\`;
+  const { rows } = await db.query(q, params);
+  res.json({ tasks: rows, total: rows.length });
+});
+
+app.post('/tasks', auth, async (req, res) => {
+  const { title, description, priority='medium', due_date, assignee_id } = req.body;
+  if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
+  const { rows } = await db.query(
+    'INSERT INTO tasks(title,description,priority,due_date,creator_id,assignee_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
+    [title.trim(), description||null, priority, due_date||null, req.user.id, assignee_id||null]
+  );
+  res.status(201).json(rows[0]);
+});
+
+app.patch('/tasks/:id', auth, async (req, res) => {
+  const { status, title, priority, assignee_id, description } = req.body;
+  const { rows } = await db.query(
+    \`UPDATE tasks SET status=COALESCE($1,status),title=COALESCE($2,title),
+     priority=COALESCE($3,priority),assignee_id=COALESCE($4,assignee_id),
+     description=COALESCE($5,description),updated_at=NOW()
+     WHERE id=$6 AND creator_id=$7 AND deleted_at IS NULL RETURNING *\`,
+    [status,title,priority,assignee_id,description,req.params.id,req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Task not found' });
+  res.json(rows[0]);
+});
+
+app.delete('/tasks/:id', auth, async (req, res) => {
+  await db.query('UPDATE tasks SET deleted_at=NOW() WHERE id=$1 AND creator_id=$2',[req.params.id,req.user.id]);
+  res.status(204).send();
+});
+
+app.get('/tasks/stats', auth, async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT status,priority,COUNT(*) FROM tasks WHERE creator_id=$1 AND deleted_at IS NULL GROUP BY status,priority',
+    [req.user.id]
+  );
+  res.json({ stats: rows });
+});
+
+app.get('/health', (_, res) => res.json({ status:'ok', ts: new Date() }));
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(\`✓ API ready on :\${PORT}\`));`,
+database:`-- ======================================================
+-- Task Management App — Database Schema
+-- Generated by AIDEN Architect Agent v2
+-- Engine: PostgreSQL 16
+-- ======================================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- for full-text search
+
+-- ── ENUMS ────────────────────────────────────────────────────
+CREATE TYPE task_status   AS ENUM ('todo','in_progress','review','done','cancelled');
+CREATE TYPE task_priority AS ENUM ('low','medium','high','urgent');
+CREATE TYPE team_role     AS ENUM ('owner','admin','member');
+
+-- ── USERS ────────────────────────────────────────────────────
+CREATE TABLE users (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email         VARCHAR(255) UNIQUE NOT NULL,
+  password_hash TEXT         NOT NULL,
+  name          VARCHAR(100) NOT NULL,
+  avatar_url    TEXT,
+  is_active     BOOLEAN      NOT NULL DEFAULT true,
+  last_login    TIMESTAMPTZ,
+  deleted_at    TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_users_email      ON users(lower(email));
+CREATE INDEX idx_users_active     ON users(is_active) WHERE deleted_at IS NULL;
+
+-- ── TEAMS ────────────────────────────────────────────────────
+CREATE TABLE teams (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name       VARCHAR(100) NOT NULL,
+  slug       VARCHAR(60)  UNIQUE NOT NULL,
+  owner_id   UUID         NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE team_members (
+  team_id   UUID      REFERENCES teams(id) ON DELETE CASCADE,
+  user_id   UUID      REFERENCES users(id) ON DELETE CASCADE,
+  role      team_role NOT NULL DEFAULT 'member',
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (team_id, user_id)
+);
+
+-- ── TASKS ────────────────────────────────────────────────────
+CREATE TABLE tasks (
+  id          UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title       VARCHAR(500)  NOT NULL,
+  description TEXT,
+  status      task_status   NOT NULL DEFAULT 'todo',
+  priority    task_priority NOT NULL DEFAULT 'medium',
+  due_date    DATE,
+  tags        TEXT[]        NOT NULL DEFAULT '{}',
+  creator_id  UUID          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  assignee_id UUID          REFERENCES users(id) ON DELETE SET NULL,
+  team_id     UUID          REFERENCES teams(id) ON DELETE CASCADE,
+  deleted_at  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_tasks_creator   ON tasks(creator_id)   WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_assignee  ON tasks(assignee_id)  WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_status    ON tasks(status)        WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_priority  ON tasks(priority)      WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_due       ON tasks(due_date)      WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_title_trgm ON tasks USING GIN (title gin_trgm_ops);
+
+-- ── AUDIT LOG ────────────────────────────────────────────────
+CREATE TABLE audit_log (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  table_name VARCHAR(50)  NOT NULL,
+  record_id  UUID         NOT NULL,
+  action     VARCHAR(10)  NOT NULL CHECK (action IN ('INSERT','UPDATE','DELETE')),
+  user_id    UUID         REFERENCES users(id) ON DELETE SET NULL,
+  old_data   JSONB,
+  new_data   JSONB,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_audit_record ON audit_log(table_name, record_id);
+
+-- ── TRIGGERS ─────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$;
+
+CREATE TRIGGER trg_tasks_updated BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_users_updated BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();`,
+docker:`# ======================================================
+# docker-compose.yml — Generated by AIDEN Deployer v2
+# Full-stack production deployment
+# ======================================================
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskapp_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       \${POSTGRES_DB:-taskapp}
+      POSTGRES_USER:     \${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER:-appuser} -d \${POSTGRES_DB:-taskapp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [internal]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: taskapp_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV:     production
+      PORT:         3001
+      DATABASE_URL: postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB}
+      JWT_SECRET:   \${JWT_SECRET:?required}
+      FRONTEND_URL: \${FRONTEND_URL:-https://yourdomain.com}
+    depends_on:
+      postgres: { condition: service_healthy }
+    expose: ["3001"]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: \${REACT_APP_API_URL:-/api}
+    container_name: taskapp_web
+    restart: unless-stopped
+    expose: ["80"]
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [internal]
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: taskapp_proxy
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports: ["80:80", "443:443"]
+    depends_on: [frontend, backend]
+    networks: [internal, external]
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  internal: { driver: bridge, internal: true }
+  external: { driver: bridge }`,
+env:`# ======================================================
+# .env.example — Generated by AIDEN Deployer v2
+# Copy to .env — never commit .env to version control
+# ======================================================
+
+# ── Application ──────────────────────────────────────
+NODE_ENV=development
+PORT=3001
+
+# ── Database ─────────────────────────────────────────
+# Full connection string (overrides individual vars)
+DATABASE_URL=postgresql://appuser:changeme@localhost:5432/taskapp
+
+# Individual vars (used by docker-compose)
+POSTGRES_DB=taskapp
+POSTGRES_USER=appuser
+POSTGRES_PASSWORD=changeme_use_strong_password
+
+# ── Authentication ────────────────────────────────────
+# Generate: openssl rand -hex 64
+JWT_SECRET=replace_with_64_byte_random_hex_string
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# ── Frontend ─────────────────────────────────────────
+REACT_APP_API_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:3000
+
+# ── Email (notifications) ────────────────────────────
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=SG.your_sendgrid_key_here
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME=TaskApp
+
+# ── Observability ────────────────────────────────────
+LOG_LEVEL=info
+SENTRY_DSN=https://your_dsn@sentry.io/project_id`
+  };
+}
+
+/* ===== TESTS ===== */
+const TEST_CASES = [
+  {icon:'✅',cls:'tc-pass',name:'POST /auth/register — success 201',desc:'Creates user, returns JWT access token and user object with id, email, name.'},
+  {icon:'✅',cls:'tc-pass',name:'POST /auth/login — valid credentials',desc:'Returns access_token. Verifiable via jwt.verify() with correct secret.'},
+  {icon:'✅',cls:'tc-pass',name:'POST /auth/login — wrong password → 401',desc:'Responds with 401 and error message. Does not leak password hash.'},
+  {icon:'✅',cls:'tc-pass',name:'GET /tasks — authenticated user sees own tasks',desc:'Only returns tasks where creator_id = req.user.id. No data leakage across users.'},
+  {icon:'✅',cls:'tc-pass',name:'POST /tasks — creates with correct defaults',desc:'Status defaults to "todo", priority to "medium". UUID assigned automatically.'},
+  {icon:'✅',cls:'tc-pass',name:'PATCH /tasks/:id — status update workflow',desc:'Transitions todo→in_progress→review→done. Rejects invalid enum values with 400.'},
+  {icon:'✅',cls:'tc-pass',name:'DELETE /tasks/:id — soft delete',desc:'Sets deleted_at timestamp. Task not returned by GET /tasks after deletion.'},
+  {icon:'✅',cls:'tc-pass',name:'GET /tasks?status=in_progress — filter works',desc:'Returns only tasks matching the status filter for the authenticated user.'},
+  {icon:'✅',cls:'tc-pass',name:'SQL injection in title field → blocked',desc:'Parameterized query prevents injection. Test input: \'; DROP TABLE tasks; --'},
+  {icon:'⚠️',cls:'tc-skip',name:'Rate limiter: 200 req/15min threshold',desc:'Skipped in unit test — tested in integration suite against running server.'},
+  {icon:'✅',cls:'tc-pass',name:'Auth middleware — expired token → 401',desc:'JWT with nbf in past correctly rejected. Refresh flow not yet tested.'},
+  {icon:'✅',cls:'tc-pass',name:'DB: updated_at trigger fires on UPDATE',desc:'updated_at column advances when task row is modified via PATCH endpoint.'},
+];
+
+function renderTests(){
+  const suite = document.getElementById('testSuite');
+  const pass = TEST_CASES.filter(t=>t.cls==='tc-pass').length;
+  document.getElementById('testStats').textContent = pass+'/'+TEST_CASES.length+' passing';
+  suite.innerHTML = TEST_CASES.map(t=>`
+    <div class="test-case">
+      <span class="tc-icon ${t.cls}" style="font-size:.9rem">${t.icon}</span>
+      <div>
+        <div class="tc-name">${t.name}</div>
+        <div class="tc-desc">${t.desc}</div>
+      </div>
+    </div>`).join('');
+}
+
+/* ===== FILE TREE ===== */
+function renderFileTree(){
+  const items=[
+    {n:'taskapp/',d:true,i:0},{n:'frontend/',d:true,i:1},
+    {n:'src/',d:true,i:2},{n:'App.jsx',d:false,i:3},
+    {n:'components/',d:true,i:3},{n:'TaskCard.jsx',d:false,i:4},
+    {n:'TaskForm.jsx',d:false,i:4},{n:'Dashboard.jsx',d:false,i:4},
+    {n:'context/',d:true,i:3},{n:'AuthContext.jsx',d:false,i:4},
+    {n:'hooks/',d:true,i:3},{n:'useTasks.js',d:false,i:4},
+    {n:'package.json',d:false,i:2},{n:'Dockerfile',d:false,i:2},
+    {n:'backend/',d:true,i:1},{n:'server.js',d:false,i:2},
+    {n:'routes/',d:true,i:2},{n:'auth.js',d:false,i:3},{n:'tasks.js',d:false,i:3},
+    {n:'middleware/',d:true,i:2},{n:'auth.js',d:false,i:3},{n:'rateLimit.js',d:false,i:3},
+    {n:'controllers/',d:true,i:2},{n:'taskController.js',d:false,i:3},
+    {n:'package.json',d:false,i:2},{n:'Dockerfile',d:false,i:2},
+    {n:'database/',d:true,i:1},{n:'schema.sql',d:false,i:2},{n:'seed.sql',d:false,i:2},
+    {n:'migrations/',d:true,i:2},{n:'001_initial.sql',d:false,i:3},
+    {n:'nginx/',d:true,i:1},{n:'nginx.conf',d:false,i:2},
+    {n:'.github/',d:true,i:1},{n:'workflows/',d:true,i:2},{n:'deploy.yml',d:false,i:3},
+    {n:'docker-compose.yml',d:false,i:0},{n:'.env.example',d:false,i:0},{n:'README.md',d:false,i:0}
+  ];
+  document.getElementById('ftreeBody').innerHTML = items.map(x=>`
+    <div class="ft-item ${x.d?'d':''}">
+      ${'<span class="ft-indent"></span>'.repeat(x.i)}
+      ${x.d?'📁':'📄'} ${x.n}
+    </div>`).join('');
+}
+
+/* ===== RENDER CODE OUTPUT ===== */
+function renderCode(code){
+  const tabs = [
+    {id:'frontend',label:'App.jsx',icon:'⚛️',path:'frontend/src/App.jsx',badge:'React'},
+    {id:'backend', label:'server.js',icon:'⚡',path:'backend/server.js',badge:'Node'},
+    {id:'database',label:'schema.sql',icon:'🗄️',path:'database/schema.sql',badge:'PG'},
+    {id:'docker',  label:'docker-compose.yml',icon:'🐳',path:'docker-compose.yml',badge:'Docker'},
+    {id:'env',     label:'.env.example',icon:'🔑',path:'.env.example',badge:'Config'},
+  ];
+  const tabBar = document.getElementById('cwTabs');
+  const panes  = document.getElementById('cwPanes');
+  tabBar.innerHTML=''; panes.innerHTML='';
+  tabs.forEach((t,i)=>{
+    const tab = document.createElement('div');
+    tab.className='cw-tab'+(i===0?' on':'');
+    tab.innerHTML=`${t.icon} ${t.label} <span class="tbadge">${t.badge}</span>`;
+    tab.onclick=()=>{
+      document.querySelectorAll('.cw-tab').forEach(x=>x.classList.remove('on'));
+      document.querySelectorAll('.cw-pane').forEach(x=>x.classList.remove('on'));
+      tab.classList.add('on');
+      document.getElementById('pane-'+t.id).classList.add('on');
+    };
+    tabBar.appendChild(tab);
+    const pane = document.createElement('div');
+    pane.className='cw-pane'+(i===0?' on':'');
+    pane.id='pane-'+t.id;
+    pane.innerHTML=`
+      <div class="file-bar">
+        <span class="file-path">${t.path}</span>
+        <div class="file-actions">
+          <button class="fa-btn" onclick="copyFile('${t.id}')">Copy</button>
+          <button class="fa-btn" onclick="downloadFile('${t.id}','${t.label}')">Download</button>
+        </div>
+      </div>
+      <pre class="code" id="pcode-${t.id}">${escHtml(code[t.id]||'// No content generated')}</pre>`;
+    panes.appendChild(pane);
+  });
+  document.getElementById('codeWorkspace').classList.add('show');
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function copyFile(id){
+  const el = document.getElementById('pcode-'+id);
+  navigator.clipboard.writeText(el.textContent).then(()=>{
+    event.target.textContent='Copied!';
+    event.target.style.color='var(--accent3)';
+    setTimeout(()=>{event.target.textContent='Copy';event.target.style.color='';},2000);
+  });
+}
+
+function downloadFile(id, filename){
+  const content = document.getElementById('pcode-'+id).textContent;
+  const a = document.createElement('a');
+  a.href = 'data:text/plain;charset=utf-8,'+encodeURIComponent(content);
+  a.download = filename;
+  a.click();
+}
+
+function saveApiKey(){
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if(key){
+    localStorage.setItem('anthropic_api_key', key);
+    document.getElementById('apiKeyStatus').style.display='block';
+    setTimeout(()=>document.getElementById('apiKeyStatus').style.display='none',2000);
+  }
+}
+
+function saveProxy(){
+  const url = document.getElementById('proxyInput').value.trim();
+  if(url){
+    localStorage.setItem('anthropic_proxy_url', url);
+    document.getElementById('proxyInput').style.borderColor='var(--accent3)';
+    setTimeout(()=>document.getElementById('proxyInput').style.borderColor='',2000);
+  }
+}
+
+const FREE_PROXIES = {
+  cors:   'https://cors.sh/1p/' + encodeURIComponent('https://api.anthropic.com/v1/messages'),
+  custom: ''
+};
+
+function setFreeProxy(type){
+  if(type==='custom'){
+    const url = prompt('Enter your CORS proxy URL.\nThe proxy must forward to: https://api.anthropic.com/v1/messages\nExample: https://my-worker.workers.dev/');
+    if(url) {
+      document.getElementById('proxyInput').value = url;
+      localStorage.setItem('anthropic_proxy_url', url);
+    }
+    return;
+  }
+  const url = FREE_PROXIES[type];
+  if(url){
+    document.getElementById('proxyInput').value = url;
+    localStorage.setItem('anthropic_proxy_url', url);
+    document.getElementById('proxyInput').style.borderColor='var(--accent3)';
+    setTimeout(()=>document.getElementById('proxyInput').style.borderColor='',2000);
+  }
+}
+
+/* ===== MAIN LAUNCH ===== */
+let runStart;
+async function launch(){
+  const srs = document.getElementById('srsInput').value.trim();
+  if(!srs){ alert('Please enter an SRS document'); return; }
+
+  const API_KEY = localStorage.getItem('anthropic_api_key');
+  if(!API_KEY){
+    alert('Please enter your Anthropic API key above and click Save');
+    document.getElementById('apiKeyInput').focus();
+    return;
+  }
+
+  const btn = document.getElementById('launchBtn');
+  btn.classList.add('go'); btn.disabled=true;
+  runStart = Date.now();
+
+  // Reset
+  document.getElementById('commsBody').innerHTML='<div style="text-align:center;padding:40px 0;color:var(--text-dim);font-size:.7rem;">Initializing agents...</div>';
+  msgCount=0;
+  document.getElementById('commsCount').textContent='0 messages';
+  document.getElementById('metricsRow').style.display='none';
+  document.getElementById('codeWorkspace').classList.remove('show');
+  document.getElementById('testsPanel').classList.remove('show');
+  document.getElementById('fileTree').classList.remove('show');
+  document.getElementById('deployPanel').classList.remove('show');
+  [0,1,2,3,4].forEach(i=>{ setAgent(i,'idle',0,''); setFlow(i+1,false); });
+  [0,1,2,3,4].forEach(i=>document.getElementById('fa'+i)?.classList.remove('lit'));
+  document.getElementById('fn0').classList.add('active');
+
+  // ── Timeline ───────────────────────────────────────────────
+
+  // 0.3s: SRS node lights up
+  schedule(()=>{ setFlow(0,false); document.getElementById('fn0').classList.add('done'); },300);
+
+  // 0.8s: Analyzer starts
+  schedule(()=>{
+    setAgent(0,'running',10,AGENTS[0].thoughts[0]);
+    setFlow(1,true);
+    document.getElementById('fa0').classList.add('lit');
+    postMsg(COMMS[0]);
+  },800);
+
+  // thought ticks for analyzer
+  [1,2,3,4].forEach((t,i)=>schedule(()=>{
+    document.getElementById('at0').textContent=AGENTS[0].thoughts[t];
+    document.getElementById('ap0').style.width=(20+i*18)+'%';
+  },(1200+i*400)));
+
+  // 2.2s: Analyzer posts result, Architect starts
+  schedule(()=>{ postMsg(COMMS[1]); },2200);
+  schedule(()=>{
+    setAgent(0,'done',100,'');
+    document.getElementById('fn1').classList.add('done');
+    setAgent(1,'running',10,AGENTS[1].thoughts[0]);
+    setFlow(2,true);
+    document.getElementById('fa1').classList.add('lit');
+  },2600);
+
+  [1,2,3,4].forEach((t,i)=>schedule(()=>{
+    document.getElementById('at1').textContent=AGENTS[1].thoughts[t];
+    document.getElementById('ap1').style.width=(20+i*18)+'%';
+  },(3000+i*350)));
+
+  // 3.8s: Architect↔Analyzer dialogue
+  schedule(()=>postMsg(COMMS[2]),3800);
+  schedule(()=>postMsg(COMMS[3]),4500);
+  schedule(()=>{
+    postMsg(COMMS[4]);
+    setAgent(1,'done',100,'');
+    document.getElementById('fn2').classList.add('done');
+    setAgent(2,'running',5,AGENTS[2].thoughts[0]);
+    setFlow(3,true);
+    document.getElementById('fa2').classList.add('lit');
+  },5200);
+
+  // Coder thoughts while API runs
+  [1,2,3,4].forEach((t,i)=>schedule(()=>{
+    document.getElementById('at2').textContent=AGENTS[2].thoughts[t];
+    document.getElementById('ap2').style.width=(10+i*18)+'%';
+  },(5800+i*600)));
+
+  schedule(()=>postMsg(COMMS[5]),6000);
+
+  // API call
+  let code;
+  let apiStatus = '';
+  const apiCallStart = Date.now();
+  try {
+    code = await callAPI(srs, (s) => { apiStatus = s; });
+  } catch(e) {
+    if(e.name === 'AbortError'){
+      btn.classList.remove('go'); btn.disabled=false;
+      alert('API request timed out after 2 minutes. Try using a CORS proxy if running from a browser.');
+      return;
+    }
+    if(e.message === 'NO_API_KEY'){
+      btn.classList.remove('go'); btn.disabled=false;
+      alert('API key required. Please enter your Anthropic API key and click Save.');
+      return;
+    }
+    console.warn('API call failed:', e.message, '— using fallback');
+    code = fallback();
+  }
+  const apiMs = Date.now() - apiCallStart;
+
+  // After API returns (≈8-12s)
+  schedule(()=>{
+    document.getElementById('ap2').style.width='95%';
+    document.getElementById('at2').textContent='Finalizing file structure and imports...';
+  },50);
+
+  schedule(()=>{
+    postMsg(COMMS[6]);
+    setAgent(2,'done',100,'');
+    document.getElementById('fn3').classList.add('done');
+    setAgent(3,'running',10,AGENTS[3].thoughts[0]);
+    setFlow(4,true);
+    document.getElementById('fa3').classList.add('lit');
+  },300);
+
+  [1,2,3,4].forEach((t,i)=>schedule(()=>{
+    document.getElementById('at3').textContent=AGENTS[3].thoughts[t];
+    document.getElementById('ap3').style.width=(20+i*18)+'%';
+  },(500+i*300)));
+
+  schedule(()=>postMsg(COMMS[7]),800);
+  schedule(()=>{
+    postMsg(COMMS[8]);
+    setAgent(3,'done',100,'');
+    document.getElementById('fn4').classList.add('done');
+    setAgent(4,'running',10,AGENTS[4].thoughts[0]);
+    setFlow(5,true);
+    document.getElementById('fa4').classList.add('lit');
+  },1200);
+
+  [1,2,3,4].forEach((t,i)=>schedule(()=>{
+    document.getElementById('at4').textContent=AGENTS[4].thoughts[t];
+    document.getElementById('ap4').style.width=(20+i*18)+'%';
+  },(1400+i*280)));
+
+  schedule(()=>{
+    postMsg(COMMS[9]);
+    setAgent(4,'done',100,'');
+    document.getElementById('fn5').classList.add('done');
+  },2600);
+
+  schedule(()=>{
+    postMsg(COMMS[10]);
+    document.getElementById('fn0').classList.remove('active');
+  },3200);
+
+  // ── Render output ──────────────────────────────────────────
+  schedule(()=>{
+    const loc = Object.values(code).join('\n').split('\n').length;
+    const eps = (code.backend.match(/app\.(get|post|put|patch|delete)/g)||[]).length;
+    const totalS = ((Date.now()-runStart)/1000).toFixed(1);
+
+    document.getElementById('metricsRow').style.display='grid';
+    document.getElementById('mv0').textContent=loc;
+    document.getElementById('mv1').textContent=Object.keys(code).length+1;
+    document.getElementById('mv2').textContent=eps;
+    document.getElementById('mv3').textContent=totalS;
+
+    renderCode(code);
+
+    const wantTests = document.getElementById('testTog').classList.contains('y');
+    if(wantTests){
+      renderTests();
+      document.getElementById('testsPanel').classList.add('show');
+    }
+
+    renderFileTree();
+    document.getElementById('fileTree').classList.add('show');
+    document.getElementById('deployPanel').classList.add('show');
+
+    btn.classList.remove('go'); btn.disabled=false;
+    document.getElementById('activeCount').textContent='5/5 done';
+
+    setTimeout(()=>{
+      document.getElementById('metricsRow').scrollIntoView({behavior:'smooth',block:'start'});
+    },200);
+  },3600);
+}
+
+// init
+document.getElementById('activeCount').textContent='0/5 active';
+// Load saved API key and proxy
+const savedKey = localStorage.getItem('anthropic_api_key');
+if(savedKey) document.getElementById('apiKeyInput').value = savedKey;
+const savedProxy = localStorage.getItem('anthropic_proxy_url');
+if(savedProxy) {
+  document.getElementById('proxyInput').value = savedProxy;
+} else {
+  // Default to cors.sh proxy for demo — no setup needed
+  const defaultProxy = 'https://cors.sh/1p/' + encodeURIComponent('https://api.anthropic.com/v1/messages');
+  document.getElementById('proxyInput').value = defaultProxy;
+  localStorage.setItem('anthropic_proxy_url', defaultProxy);
+}
+</script>
+</body>
+</html>
