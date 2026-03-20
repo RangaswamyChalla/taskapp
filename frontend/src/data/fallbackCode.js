@@ -67,11 +67,11 @@ export default function App() {
   backend: `const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
+const sqlite3 = require('sqlite3');
 require('dotenv').config();
 
 const app = express();
-const db = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = new sqlite3.Database('./taskapp.db');
 
 app.use(express.json());
 
@@ -82,134 +82,120 @@ const auth = (req, res, next) => {
   catch { res.status(401).json({ error: 'Token invalid' }); }
 };
 
-app.post('/auth/register', async (req, res) => {
+app.post('/auth/register', (req, res) => {
   const { email, password, name } = req.body;
-  const hash = await bcrypt.hash(password, 12);
-  const { rows } = await db.query(
-    'INSERT INTO users(email,password_hash,name) VALUES($1,$2,$3) RETURNING id,email,name',
-    [email.toLowerCase(), hash, name]
-  );
-  res.status(201).json({ user: rows[0], token: jwt.sign({ id: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '15m' }) });
+  bcrypt.hash(password, 12, (err, hash) => {
+    if (err) return res.status(500).json({ error: 'Server error' });
+    db.run('INSERT INTO users(email,password_hash,name) VALUES(?,?,?)',
+      [email.toLowerCase(), hash, name],
+      function(err) {
+        if (err) return res.status(400).json({ error: 'Email already exists' });
+        res.status(201).json({ user: { id: this.lastID, email, name }, token: jwt.sign({ id: this.lastID }, process.env.JWT_SECRET, { expiresIn: '7d' }) });
+      });
+  });
 });
 
-app.post('/auth/login', async (req, res) => {
+app.post('/auth/login', (req, res) => {
   const { email, password } = req.body;
-  const { rows } = await db.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase()]);
-  if (!rows[0] || !await bcrypt.compare(password, rows[0].password_hash))
-    return res.status(401).json({ error: 'Invalid credentials' });
-  res.json({ user: { id: rows[0].id, email: rows[0].email }, token: jwt.sign({ id: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '15m' }) });
+  db.get('SELECT * FROM users WHERE email=? AND deleted_at IS NULL', [email.toLowerCase()], (err, user) => {
+    if (err || !user) return res.status(401).json({ error: 'Invalid credentials' });
+    bcrypt.compare(password, user.password_hash, (err, match) => {
+      if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+      res.json({ user: { id: user.id, email: user.email }, token: jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' }) });
+    });
+  });
 });
 
-app.get('/tasks', auth, async (req, res) => {
-  const { rows } = await db.query('SELECT * FROM tasks WHERE creator_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC', [req.user.id]);
-  res.json({ tasks: rows });
+app.get('/tasks', auth, (req, res) => {
+  db.all('SELECT * FROM tasks WHERE creator_id=? AND deleted_at IS NULL ORDER BY created_at DESC', [req.user.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ tasks: rows });
+  });
 });
 
-app.post('/tasks', auth, async (req, res) => {
+app.post('/tasks', auth, (req, res) => {
   const { title, description, priority='medium', due_date } = req.body;
-  const { rows } = await db.query(
-    'INSERT INTO tasks(title,description,priority,due_date,creator_id) VALUES($1,$2,$3,$4,$5) RETURNING *',
-    [title, description, priority, due_date, req.user.id]
-  );
-  res.status(201).json(rows[0]);
+  if (!title) return res.status(400).json({ error: 'Title required' });
+  db.run('INSERT INTO tasks(title,description,priority,due_date,creator_id) VALUES(?,?,?,?,?)',
+    [title, description, priority, due_date, req.user.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Database error' });
+      db.get('SELECT * FROM tasks WHERE id=?', [this.lastID], (err, row) => {
+        res.status(201).json(row);
+      });
+    });
 });
 
-app.patch('/tasks/:id', auth, async (req, res) => {
+app.patch('/tasks/:id', auth, (req, res) => {
   const { status, title, priority } = req.body;
-  const { rows } = await db.query(
-    'UPDATE tasks SET status=COALESCE($1,status),title=COALESCE($2,title),priority=COALESCE($3,priority),updated_at=NOW() WHERE id=$4 AND creator_id=$5 AND deleted_at IS NULL RETURNING *',
-    [status, title, priority, req.params.id, req.user.id]
-  );
-  if (!rows[0]) return res.status(404).json({ error: 'Task not found' });
-  res.json(rows[0]);
+  const updates = [], params = [];
+  if (status) { updates.push('status=?'); params.push(status); }
+  if (title) { updates.push('title=?'); params.push(title); }
+  if (priority) { updates.push('priority=?'); params.push(priority); }
+  if (!updates.length) return res.status(400).json({ error: 'No updates' });
+  updates.push('updated_at=datetime("now")');
+  params.push(req.params.id, req.user.id);
+  db.run('UPDATE tasks SET ' + updates.join(',') + ' WHERE id=? AND creator_id=?', params, function(err) {
+    if (this.changes === 0) return res.status(404).json({ error: 'Not found' });
+    db.get('SELECT * FROM tasks WHERE id=?', [req.params.id], (_, row) => res.json(row));
+  });
 });
 
-app.delete('/tasks/:id', auth, async (req, res) => {
-  await db.query('UPDATE tasks SET deleted_at=NOW() WHERE id=$1 AND creator_id=$2', [req.params.id, req.user.id]);
-  res.status(204).send();
+app.delete('/tasks/:id', auth, (req, res) => {
+  db.run('UPDATE tasks SET deleted_at=datetime("now") WHERE id=? AND creator_id=?', [req.params.id, req.user.id], function(err) {
+    if (this.changes === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).send();
+  });
 });
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
-
 app.listen(3001, () => console.log('API ready on :3001'));`,
-  database: `-- PostgreSQL Schema
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TYPE task_status AS ENUM ('todo','in_progress','review','done');
-CREATE TYPE task_priority AS ENUM ('low','medium','high','urgent');
-
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email VARCHAR(255) UNIQUE NOT NULL,
+  database: `-- SQLite Schema (Development)
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  name VARCHAR(100) NOT NULL,
-  deleted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name TEXT NOT NULL,
+  last_login TEXT,
+  deleted_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE TABLE tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title VARCHAR(500) NOT NULL,
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
   description TEXT,
-  status task_status NOT NULL DEFAULT 'todo',
-  priority task_priority NOT NULL DEFAULT 'medium',
-  due_date DATE,
-  creator_id UUID REFERENCES users(id) ON DELETE RESTRICT,
-  assignee_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  deleted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  status TEXT NOT NULL DEFAULT 'todo',
+  priority TEXT NOT NULL DEFAULT 'medium',
+  due_date TEXT,
+  creator_id INTEGER NOT NULL,
+  assignee_id INTEGER,
+  deleted_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (creator_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_tasks_creator ON tasks(creator_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_tasks_status ON tasks(status) WHERE deleted_at IS NULL;`,
-  docker: `version: '3.9'
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: taskapp
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks: [internal]
-
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: postgresql://appuser:\${POSTGRES_PASSWORD}@postgres:5432/taskapp
-      JWT_SECRET: \${JWT_SECRET}
-    depends_on: [postgres]
-    networks: [internal]
-
-  frontend:
-    build: ./frontend
-    depends_on: [backend]
-    networks: [internal]
-
-  nginx:
-    image: nginx:1.25-alpine
-    ports: ["80:80", "443:443"]
-    depends_on: [frontend, backend]
-    networks: [internal, external]
-
-volumes: { pgdata: }
-networks:
-  internal: { driver: bridge, internal: true }
-  external: { driver: bridge }`,
+CREATE INDEX IF NOT EXISTS idx_tasks_creator ON tasks(creator_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);`,
+  nginx: `worker_processes auto;
+events { worker_connections 1024; }
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  upstream backend { server backend:3001; }
+  upstream frontend { server frontend:80; }
+  server {
+    listen 80;
+    location /api/ { proxy_pass http://backend/; }
+    location / { try_files $uri $uri/ /index.html; }
+  }
+}`,
   env: `# Environment Variables
-NODE_ENV=production
+NODE_ENV=development
 PORT=3001
-
-DATABASE_URL=postgresql://appuser:changeme@localhost:5432/taskapp
-POSTGRES_DB=taskapp
-POSTGRES_USER=appuser
-POSTGRES_PASSWORD=changeme
-
+DATABASE_URL=./taskapp.db
 JWT_SECRET=replace_with_64_byte_random_hex_string
-JWT_EXPIRES_IN=15m
-
-REACT_APP_API_URL=http://localhost:3001
-FRONTEND_URL=http://localhost:3000`
+REACT_APP_API_URL=http://localhost:3001`
 };

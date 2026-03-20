@@ -8,7 +8,7 @@ export const AGENTS = [
   { id: 3, name: 'Reviewer', color: '#f87171', icon: '🔍', sub: 'QA + Security',
     thoughts: ["Scanning for SQL injection...", "Checking JWT secret exposure...", "Validating input sanitization...", "Reviewing error handling...", "Confirming CORS security..."] },
   { id: 4, name: 'Deployer', color: '#818cf8', icon: '🚀', sub: 'Config Gen',
-    thoughts: ["Building Dockerfile...", "Configuring Nginx...", "Writing health checks...", "Generating GitHub Actions...", "Preparing .env.example..."] },
+    thoughts: ["Generating config files...", "Writing package.json...", "Creating nginx.conf...", "Setting up environment...", "Preparing deployment..."] },
 ];
 
 export const COMMS = [
@@ -21,6 +21,6 @@ export const COMMS = [
   { from: 'CODER', to: 'REVIEWER', color: '#fbbf24', msg: 'Code generation complete. <b>5 files</b> produced. JWT hardcode flagged — needs env var.' },
   { from: 'REVIEWER', to: 'CODER', color: '#f87171', msg: '⚠️ JWT hardcode patched at <b>server.js:L34</b>. Parameterized query fixed at <b>L12</b>.' },
   { from: 'REVIEWER', to: 'DEPLOYER', color: '#f87171', msg: 'Security review passed. <b>0 critical</b>, <b>0 high</b>, 2 medium patched.' },
-  { from: 'DEPLOYER', to: 'ORCHESTRATOR', color: '#818cf8', msg: 'Deployment artifacts: <b>docker-compose.yml</b>, <b>Dockerfile×2</b>, <b>nginx.conf</b>, <b>deploy.yml</b>.' },
+  { from: 'DEPLOYER', to: 'ORCHESTRATOR', color: '#818cf8', msg: 'Deployment artifacts: <b>package.json</b>, <b>server.js</b>, <b>nginx.conf</b>, <b>.env.example</b>.' },
   { from: 'ORCHESTRATOR', to: null, color: '#00d4ff', msg: '✅ Pipeline complete. <b>6 files</b>, <b>0 security issues</b>. Deploy-ready.' },
 ];
