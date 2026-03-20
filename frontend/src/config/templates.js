@@ -17,7 +17,7 @@ FR-07: Audit log records all state changes
 NFR-01: REST API p95 latency < 150ms
 NFR-02: PostgreSQL with proper foreign keys, indexes on status+priority
 NFR-03: Stateless JWT authentication, 15min access / 7d refresh
-NFR-04: Docker deployment with Nginx reverse proxy
+NFR-04: Nginx reverse proxy for production deployment
 
 4. DATA ENTITIES
 User: id(uuid), email, password_hash, name, avatar_url, created_at

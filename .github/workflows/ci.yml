@@ -51,15 +51,3 @@ jobs:
         run: npm test -- --watchAll=false
         working-directory: frontend
 
-  docker-build:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build backend image
-        run: docker build -t taskapp-backend:test ./backend
-
-      - name: Build frontend image
-        run: docker build -t taskapp-frontend:test ./frontend

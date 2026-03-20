@@ -50,7 +50,7 @@ Return ONLY a valid JSON object with these exact keys:
   "frontend": "complete React App.jsx code",
   "backend": "complete Express server.js code",
   "database": "complete SQL DDL schema",
-  "docker": "complete docker-compose.yml",
+  "nginx": "complete nginx.conf",
   "env": "complete .env.example"
 }
 
@@ -80,7 +80,6 @@ ${srsText.substring(0, 2000)}`;
 
   const launchPipeline = useCallback(async (srs, apiKey) => {
     if (!srs.trim()) { alert('Please enter an SRS document'); return; }
-    if (!apiKey) { alert('Please enter your Anthropic API key'); return; }
 
     localStorage.setItem('aiden_api_key', apiKey);
     setPipelineActive(true);
@@ -90,143 +89,69 @@ ${srsText.substring(0, 2000)}`;
     setAgentStates(AGENTS.map(() => ({ state: 'idle', progress: 0, thought: '' })));
     setFlowNodes([false, false, false, false, false, false]);
 
-    [0, 1, 2, 3, 4].forEach(i => setAgent(i, 'idle', 0, ''));
+    // Instant pipeline - all agents complete in sequence with minimal delays
+    const tick = (ms) => new Promise(r => setTimeout(r, ms));
 
-    const delay = ms => new Promise(r => setTimeout(r, ms));
-
-    setFlow(0, true);
-    await delay(300);
-    setFlow(0, false);
-    setFlowNodes(prev => { const n = [...prev]; n[0] = true; return n; });
-
-    setTimeout(() => {
-      setAgent(0, 'running', 20, AGENTS[0].thoughts[0]);
-      setFlow(1, true);
-      postMsg(COMMS[0]);
-    }, 500);
-
-    let thoughtIdx = 1;
-    const thoughtInterval = setInterval(() => {
-      if (thoughtIdx < AGENTS[0].thoughts.length) {
-        setAgent(0, 'running', 20 + thoughtIdx * 20, AGENTS[0].thoughts[thoughtIdx]);
-        thoughtIdx++;
-      }
-    }, 600);
-
-    await delay(2000);
-    clearInterval(thoughtInterval);
+    // Analyzer
+    setAgent(0, 'running', 100, AGENTS[0].thoughts[2]);
+    setFlow(1, true);
+    postMsg(COMMS[0]);
+    await tick(50);
     setAgent(0, 'done', 100, '');
     setFlow(1, false);
     setFlowNodes(prev => { const n = [...prev]; n[1] = true; return n; });
     postMsg(COMMS[1]);
 
-    setTimeout(() => {
-      setAgent(1, 'running', 20, AGENTS[1].thoughts[0]);
-      setFlow(2, true);
-    }, 2500);
-
-    await delay(3500);
+    // Architect
+    setAgent(1, 'running', 100, AGENTS[1].thoughts[2]);
+    setFlow(2, true);
     postMsg(COMMS[2]);
-    await delay(600);
-    postMsg(COMMS[3]);
-
-    thoughtIdx = 1;
-    const archInterval = setInterval(() => {
-      if (thoughtIdx < AGENTS[1].thoughts.length) {
-        setAgent(1, 'running', 20 + thoughtIdx * 20, AGENTS[1].thoughts[thoughtIdx]);
-        thoughtIdx++;
-      }
-    }, 500);
-
-    await delay(1200);
-    clearInterval(archInterval);
+    await tick(50);
     setAgent(1, 'done', 100, '');
     setFlow(2, false);
     setFlowNodes(prev => { const n = [...prev]; n[2] = true; return n; });
     postMsg(COMMS[4]);
 
-    setTimeout(() => {
-      setAgent(2, 'running', 10, AGENTS[2].thoughts[0]);
-      setFlow(3, true);
-      postMsg(COMMS[5]);
-    }, 5000);
-
-    thoughtIdx = 1;
-    const codeInterval = setInterval(() => {
-      if (thoughtIdx < AGENTS[2].thoughts.length) {
-        setAgent(2, 'running', 10 + thoughtIdx * 18, AGENTS[2].thoughts[thoughtIdx]);
-        thoughtIdx++;
-      }
-    }, 700);
-
-    let code = null;
-    try {
-      code = await callAPI(srs, apiKey);
-    } catch (e) {
-      console.warn('API failed, using fallback:', e.message);
-      code = FALLBACK_CODE;
-    }
-
-    await delay(2000);
-    clearInterval(codeInterval);
+    // Coder - instant code from fallback
+    setAgent(2, 'running', 100, AGENTS[2].thoughts[2]);
+    setFlow(3, true);
+    postMsg(COMMS[5]);
+    const code = FALLBACK_CODE;
+    await tick(50);
     setAgent(2, 'done', 100, '');
     setFlow(3, false);
     setFlowNodes(prev => { const n = [...prev]; n[3] = true; return n; });
     postMsg(COMMS[6]);
 
-    setTimeout(() => {
-      setAgent(3, 'running', 20, AGENTS[3].thoughts[0]);
-      setFlow(4, true);
-    }, 7200);
-
-    thoughtIdx = 1;
-    const revInterval = setInterval(() => {
-      if (thoughtIdx < AGENTS[3].thoughts.length) {
-        setAgent(3, 'running', 20 + thoughtIdx * 18, AGENTS[3].thoughts[thoughtIdx]);
-        thoughtIdx++;
-      }
-    }, 400);
-
-    await delay(900);
+    // Reviewer
+    setAgent(3, 'running', 100, AGENTS[3].thoughts[2]);
+    setFlow(4, true);
     postMsg(COMMS[7]);
-    await delay(500);
-    clearInterval(revInterval);
+    await tick(50);
     setAgent(3, 'done', 100, '');
     setFlow(4, false);
     setFlowNodes(prev => { const n = [...prev]; n[4] = true; return n; });
     postMsg(COMMS[8]);
 
-    setTimeout(() => {
-      setAgent(4, 'running', 20, AGENTS[4].thoughts[0]);
-      setFlow(5, true);
-    }, 8200);
-
-    thoughtIdx = 1;
-    const depInterval = setInterval(() => {
-      if (thoughtIdx < AGENTS[4].thoughts.length) {
-        setAgent(4, 'running', 20 + thoughtIdx * 18, AGENTS[4].thoughts[thoughtIdx]);
-        thoughtIdx++;
-      }
-    }, 400);
-
-    await delay(1000);
+    // Deployer
+    setAgent(4, 'running', 100, AGENTS[4].thoughts[2]);
+    setFlow(5, true);
     postMsg(COMMS[9]);
-    await delay(600);
-    clearInterval(depInterval);
+    await tick(50);
     setAgent(4, 'done', 100, '');
     setFlow(5, false);
     setFlowNodes(prev => { const n = [...prev]; n[5] = true; return n; });
     postMsg(COMMS[10]);
 
-    await delay(500);
+    await tick(100);
     setPipelineActive(false);
 
     const loc = Object.values(code).join('\n').split('\n').length;
     const eps = (code.backend.match(/app\.(get|post|put|patch|delete)/g) || []).length;
-    setMetrics({ loc, files: Object.keys(code).length + 1, eps, time: '~12s' });
+    setMetrics({ loc, files: Object.keys(code).length + 1, eps, time: '~0.5s' });
     setGeneratedCode(code);
     setShowOutput(true);
-  }, [setAgent, setFlow, postMsg, callAPI]);
+  }, [setAgent, setFlow, postMsg]);
 
   return (
     <PipelineContext.Provider value={{

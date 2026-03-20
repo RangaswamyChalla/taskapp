@@ -30,6 +30,10 @@ const initSchema = (db) => {
       FOREIGN KEY (creator_id) REFERENCES users(id)
     )`);
 
+    // Add missing columns to existing tables
+    db.run(`ALTER TABLE users ADD COLUMN last_login TEXT`, () => {});
+    db.run(`ALTER TABLE users ADD COLUMN deleted_at TEXT`, () => {});
+
     db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_creator ON tasks(creator_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
   });

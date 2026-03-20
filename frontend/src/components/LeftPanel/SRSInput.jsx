@@ -42,7 +42,7 @@ const ConfigPanel = () => {
     { label: 'Frontend', on: true },
     { label: 'Backend API', on: true },
     { label: 'DB Schema', on: true },
-    { label: 'Docker', on: true },
+    { label: 'Nginx', on: true },
   ];
 
   return (

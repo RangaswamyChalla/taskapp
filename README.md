@@ -11,7 +11,6 @@ A full-stack task management application with user authentication, team manageme
 - **Frontend:** React 18, React Router, Axios
 - **Backend:** Node.js, Express, SQLite (dev) / PostgreSQL (production)
 - **Reverse Proxy:** Nginx
-- **Container:** Docker Compose
 
 ## Project Structure
 
@@ -23,8 +22,7 @@ taskapp/
 │   ├── middleware/     # Auth, validation, error handling
 │   ├── routes/        # API routes
 │   ├── tests/         # Jest unit tests
-│   ├── server.js      # Entry point
-│   └── Dockerfile     # Backend container
+│   └── server.js      # Entry point
 ├── frontend/          # React application
 │   ├── src/
 │   │   ├── components/  # UI components
@@ -32,14 +30,12 @@ taskapp/
 │   │   ├── hooks/        # Custom hooks
 │   │   ├── services/     # API service
 │   │   └── config/       # App configuration
-│   └── Dockerfile     # Frontend container
 ├── database/
 │   └── schema.sql     # PostgreSQL schema
 ├── nginx/
 │   └── nginx.conf     # Nginx configuration
 ├── .github/
 │   └── workflows/     # CI/CD pipelines
-├── docker-compose.yml # Full stack orchestration
 └── .env.example       # Environment variables template
 ```
 
@@ -47,20 +43,8 @@ taskapp/
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- Node.js 20+ (for local development)
-
-### Development with Docker
-
-```bash
-# Copy environment file
-cp .env.example .env
-
-# Start all services
-docker-compose up -d
-```
-
-The app will be available at `http://localhost`
+- Node.js 20+
+- npm or yarn
 
 ### Local Development
 
